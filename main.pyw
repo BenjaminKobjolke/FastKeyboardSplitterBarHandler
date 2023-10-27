@@ -10,11 +10,7 @@ from tkinter import Tk, Label, Button, Entry, Text, Scrollbar, END
 import os
 from elevate import elevate
 
-main_hotkey = "ctrl+alt+F10"
-
 elevate(show_console=False)
-
-
 class MyApp:
     pyautogui.PAUSE = 0.1
     # Configure mouse movement speed
@@ -40,9 +36,10 @@ class MyApp:
         self.textarea = Text(root, wrap='word', yscrollcommand=self.scrollbar.set, bg='#555555', fg='#FFFFFF')
         self.textarea.pack()
 
-        keyboard.add_hotkey(main_hotkey, self.search_splitter_bars)
+        keyboard.add_hotkey('ctrl+F10', self.search_splitter_bars)
 
         # keyboard.wait()
+
 
     def is_admin(self):
         try:
@@ -57,12 +54,11 @@ class MyApp:
         self.textarea.see(END)
 
     def end_mouse_drag(self):
-        self.debug_print("Ending mouse drag" + "\n")
-        self.mouse_is_pressed = False
         pyautogui.mouseUp()
+        self.mouse_is_pressed = False
         pyautogui.moveTo(self.initial_mouse_position[0], self.initial_mouse_position[1])
         keyboard.unhook_all()
-        keyboard.add_hotkey(main_hotkey, self.search_splitter_bars)
+        keyboard.add_hotkey('ctrl+F10', self.search_splitter_bars)
         self.hooked_keys = []
 
     def mouse_move(self, e):
@@ -96,9 +92,6 @@ class MyApp:
 
     # Function to capture the screenshot and find the splitter bars
     def search_splitter_bars(self):
-        if self.mouse_is_pressed:
-            self.end_mouse_drag()
-            return
         active_window = gw.getActiveWindow()
         print(active_window.title)
 
@@ -116,7 +109,7 @@ class MyApp:
 
         for folder in matching_subfolders:
             folder_path = os.path.join("data", folder)
-            # print("checking folder " + folder_path);
+            #print("checking folder " + folder_path);
             for filename in os.listdir(folder_path):
                 if filename.endswith(".png"):
                     template = cv2.imread(os.path.join(folder_path, filename), 0)
@@ -139,7 +132,7 @@ class MyApp:
                         pyautogui.moveTo(target_x, target_y)
                         # Once the mouse is moved to the desired position and pressed down:
                         pyautogui.mouseDown()
-                        self.mouse_is_pressed = True
+                        mouse_is_pressed = True
                         self.hooked_keys.append(keyboard.hook_key('h', self.mouse_move, suppress=True))
                         self.hooked_keys.append(keyboard.hook_key('j', self.mouse_move, suppress=True))
                         self.hooked_keys.append(keyboard.hook_key('k', self.mouse_move, suppress=True))
