@@ -95,6 +95,7 @@ def search_splitter_bars():
 
     for folder in matching_subfolders:
         folder_path = os.path.join("data", folder)
+        print("checking folder " + folder_path);
         for filename in os.listdir(folder_path):
             if filename.endswith(".png"):
                 template = cv2.imread(os.path.join(folder_path, filename), 0)
@@ -128,6 +129,8 @@ def search_splitter_bars():
                     hooked_keys.append(keyboard.hook_key('ESC', move_mouse, suppress=True))
                     # keyboard.add_hotkey('ctrl+F10', search_splitter_bars)
                     break
+    
+    print("No match found")
 
 
 if is_admin():
