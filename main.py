@@ -43,20 +43,22 @@ def search_splitter_bars():
 
         last_key_time = current_time  # Update last_key_time to the current time
 
-        print(f"Key {e.name} is pressed.")
+        shift_pressed = keyboard.is_pressed('shift')
+
+        print(f"Key {e.scan_code} is pressed.")
         speed = MOUSE_SPEED
 
-        if e.name.upper() == e.name:  # Check if the key is uppercase
+        if e.name.upper() == e.name or shift_pressed:
             speed *= 4  # Double the speed
 
         if e.event_type == 'down':  # Only act on the 'down' event
-            if e.name.lower() == 'h':
+            if e.name.lower() == 'h' or e.name.lower() == 'a' or e.scan_code == 75:
                 pyautogui.moveRel(-speed, 0, 0, pyautogui.linear, False, True)
-            elif e.name.lower() == 'j':
+            elif e.name.lower() == 'j' or e.name.lower() == 's' or e.scan_code == 80:
                 pyautogui.move(0, speed, 0, pyautogui.linear, False, True)
-            elif e.name.lower() == 'k':
+            elif e.name.lower() == 'k' or e.name.lower() == 'w' or e.scan_code == 72:
                 pyautogui.moveRel(0, -speed, 0, pyautogui.linear, False, True)
-            elif e.name.lower() == 'l':
+            elif e.name.lower() == 'l' or e.name.lower() == 'd' or e.scan_code == 77:
                 pyautogui.moveRel(speed, 0, 0, pyautogui.linear, False, True)
             elif e.name.lower() == 'esc':
                 search_splitter_bars()
@@ -126,6 +128,21 @@ def search_splitter_bars():
                     hooked_keys.append(keyboard.hook_key('J', move_mouse, suppress=True))
                     hooked_keys.append(keyboard.hook_key('K', move_mouse, suppress=True))
                     hooked_keys.append(keyboard.hook_key('L', move_mouse, suppress=True))
+
+                    hooked_keys.append(keyboard.hook_key('w', move_mouse, suppress=True))
+                    hooked_keys.append(keyboard.hook_key('a', move_mouse, suppress=True))
+                    hooked_keys.append(keyboard.hook_key('s', move_mouse, suppress=True))
+                    hooked_keys.append(keyboard.hook_key('d', move_mouse, suppress=True))
+                    hooked_keys.append(keyboard.hook_key('W', move_mouse, suppress=True))
+                    hooked_keys.append(keyboard.hook_key('A', move_mouse, suppress=True))
+                    hooked_keys.append(keyboard.hook_key('S', move_mouse, suppress=True))
+                    hooked_keys.append(keyboard.hook_key('D', move_mouse, suppress=True))
+
+                    hooked_keys.append(keyboard.hook_key('left', move_mouse, suppress=True))
+                    hooked_keys.append(keyboard.hook_key('right', move_mouse, suppress=True))
+                    hooked_keys.append(keyboard.hook_key('up', move_mouse, suppress=True))
+                    hooked_keys.append(keyboard.hook_key('down', move_mouse, suppress=True))
+
                     hooked_keys.append(keyboard.hook_key('ESC', move_mouse, suppress=True))
                     # keyboard.add_hotkey('ctrl+F10', search_splitter_bars)
                     break
