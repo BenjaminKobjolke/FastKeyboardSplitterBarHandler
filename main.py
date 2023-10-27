@@ -8,6 +8,7 @@ import sys
 import os
 import time
 
+pyautogui.PAUSE = 0.1
 # Configure mouse movement speed
 MOUSE_SPEED = 15
 
@@ -36,8 +37,9 @@ def search_splitter_bars():
         global last_key_time
         current_time = time.time() * 1000  # Get the current time in milliseconds
 
-        if current_time - last_key_time < 200:  # 200 milliseconds threshold
+        if current_time - last_key_time < 10:  # 200 milliseconds threshold
             return  # Skip this key press
+
 
         last_key_time = current_time  # Update last_key_time to the current time
 
@@ -45,17 +47,19 @@ def search_splitter_bars():
         speed = MOUSE_SPEED
 
         if e.name.upper() == e.name:  # Check if the key is uppercase
-            speed *= 2  # Double the speed
+            speed *= 4  # Double the speed
 
         if e.event_type == 'down':  # Only act on the 'down' event
             if e.name.lower() == 'h':
-                pyautogui.moveRel(-speed, 0)
+                pyautogui.moveRel(-speed, 0, 0, pyautogui.linear, False, True)
             elif e.name.lower() == 'j':
-                pyautogui.moveRel(0, speed)
+                pyautogui.move(0, speed, 0, pyautogui.linear, False, True)
             elif e.name.lower() == 'k':
-                pyautogui.moveRel(0, -speed)
+                pyautogui.moveRel(0, -speed, 0, pyautogui.linear, False, True)
             elif e.name.lower() == 'l':
-                pyautogui.moveRel(speed, 0)
+                pyautogui.moveRel(speed, 0, 0, pyautogui.linear, False, True)
+            elif e.name.lower() == 'esc':
+                search_splitter_bars()
 
     if mouse_is_pressed:  # Release the mouse and stop moving it with hjkl
         pyautogui.mouseUp()
@@ -106,8 +110,9 @@ def search_splitter_bars():
                 for pt in zip(*loc[::-1]):
                     screen_x = pt[0] + active_window.left
                     screen_y = pt[1] + active_window.top
-                    target_x = screen_x + 5
-                    target_y = screen_y
+                    target_x = screen_x + (template.shape[1] // 2)
+                    target_y = screen_y + (template.shape[0] // 2)
+
                     pyautogui.moveTo(target_x, target_y)
                     # Once the mouse is moved to the desired position and pressed down:
                     pyautogui.mouseDown()
@@ -120,6 +125,7 @@ def search_splitter_bars():
                     hooked_keys.append(keyboard.hook_key('J', move_mouse, suppress=True))
                     hooked_keys.append(keyboard.hook_key('K', move_mouse, suppress=True))
                     hooked_keys.append(keyboard.hook_key('L', move_mouse, suppress=True))
+                    hooked_keys.append(keyboard.hook_key('ESC', move_mouse, suppress=True))
                     # keyboard.add_hotkey('ctrl+F10', search_splitter_bars)
                     break
 
