@@ -10,6 +10,8 @@ from tkinter import Tk, Label, Button, Entry, Text, Scrollbar, END
 import os
 from elevate import elevate
 
+main_hotkey = "ctrl+alt+F10"
+
 elevate(show_console=False)
 class MyApp:
     pyautogui.PAUSE = 0.1
@@ -36,7 +38,7 @@ class MyApp:
         self.textarea = Text(root, wrap='word', yscrollcommand=self.scrollbar.set, bg='#555555', fg='#FFFFFF')
         self.textarea.pack()
 
-        keyboard.add_hotkey('ctrl+F10', self.search_splitter_bars)
+        keyboard.add_hotkey(main_hotkey, self.search_splitter_bars)
 
         # keyboard.wait()
 
@@ -58,7 +60,7 @@ class MyApp:
         self.mouse_is_pressed = False
         pyautogui.moveTo(self.initial_mouse_position[0], self.initial_mouse_position[1])
         keyboard.unhook_all()
-        keyboard.add_hotkey('ctrl+F10', self.search_splitter_bars)
+        keyboard.add_hotkey(main_hotkey, self.search_splitter_bars)
         self.hooked_keys = []
 
     def mouse_move(self, e):
