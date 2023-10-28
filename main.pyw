@@ -10,17 +10,18 @@ import time
 import win32gui
 import win32process
 from PIL import ImageGrab
-from tkinter import Tk, Text, Scrollbar, END, simpledialog
+from tkinter import Tk, Text, Scrollbar, END, simpledialog, Entry, Button, Label
 import os
 from elevate import elevate
 import queue
+import sys
+from PyHotKey import Key, keyboard_manager as manager
 
-main_hotkey = "ctrl+alt+F10"
+main_hotkey = "alt+shift+W"
 screenshot_hotkey = "ctrl+alt+F9"
 data_folder = "data"
 
 elevate(show_console=False)
-
 
 class MyApp:
     pyautogui.PAUSE = 0.1
@@ -50,9 +51,22 @@ class MyApp:
 
         self.textarea = Text(root, wrap='word', yscrollcommand=self.scrollbar.set, bg='#555555', fg='#FFFFFF')
         self.textarea.pack()
+        '''
+        self.text_box = Entry(root)
+        self.text_box.pack(pady=20)
+
+        self.button = Button(root, text="Submit", command=self.on_submit)
+        self.button.pack(pady=10)
+
+        self.label = Label(root, text="Waiting for message...")
+        self.label.pack(pady=20)
+        '''
 
         self.setup_hotkeys()
-        # keyboard.wait()
+
+    def on_submit(self):
+        received_data = self.text_box.get()
+        self.label.config(text=f"Received: {received_data}")
 
     def get_next_filename(self, folder_path, base_filename):
         counter = 1
@@ -67,7 +81,8 @@ class MyApp:
             task = self.q.get_nowait()
             if task == "askstring":
                 self.debug_print("yes")
-                subfolder_name = simpledialog.askstring("Input", "Enter the subfolder name to save screenshot in:", initialvalue=self.last_window_title + " - " + self.last_proccess_name)
+                subfolder_name = simpledialog.askstring("Input", "Enter the subfolder name to save screenshot in:",
+                                                        initialvalue=self.last_window_title + " - " + self.last_proccess_name)
                 print(subfolder_name)
                 self.save_screenshot(subfolder_name)
                 return
@@ -181,8 +196,24 @@ class MyApp:
                 self.end_mouse_drag()
 
     def setup_hotkeys(self):
-        keyboard.add_hotkey(main_hotkey, self.search_splitter_bars)
-        keyboard.add_hotkey(screenshot_hotkey, self.take_screenshot)
+        manager.suppress = True
+        id1 = manager.register_hotkey([Key.shift_l, Key.alt_l, 'w'], None,self.search_splitter_bars)
+        if -1 == id1:
+            print('Already registered!')
+        elif 0 == id1:
+            print('Invalid parameters!')
+        else:
+            print('Hotkey id: {}'.format(id1))
+
+        id2 = manager.register_hotkey([Key.shift_l, Key.alt_l, 'e'], None, self.take_screenshot)
+        if -1 == id2:
+            print('Already registered!')
+        elif 0 == id2:
+            print('Invalid parameters!')
+        else:
+            print('Hotkey id: {}'.format(id2))
+        # keyboard.add_hotkey(main_hotkey, self.search_splitter_bars, suppress=True)
+        # keyboard.add_hotkey(screenshot_hotkey, self.take_screenshot, suppress=True)
 
     # Function to capture the screenshot and find the splitter bars
     def search_splitter_bars(self):
@@ -203,7 +234,7 @@ class MyApp:
 
         if not matching_subfolders:
             self.debug_print(f"No matching subfolders found for '{active_window.title}' or '{process_name}'.")
-            return
+            return True
         # Remember the initial mouse position
         self.initial_mouse_position = pyautogui.position()
 
@@ -258,9 +289,10 @@ class MyApp:
 
                         self.hooked_keys.append(keyboard.hook_key('ESC', self.mouse_move, suppress=True))
                         # keyboard.add_hotkey('ctrl+F10', search_splitter_bars)
-                        return
+                        return True
 
         self.debug_print("No match found" + "\n")
+        return True
 
 
 root = Tk()
