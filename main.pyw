@@ -102,11 +102,11 @@ class MyApp:
     def take_screenshot(self):
         root.after(100, self.check_queue)
         self.debug_print("Taking screenshot" + "\n")
-        time.sleep(1)  # wait for 5 seconds
 
         # Get mouse position
         x, y = pyautogui.position()
-
+        pyautogui.move(50, 50)
+        time.sleep(1)  # wait for 5 seconds
         # Define area around the mouse position (200x100 px)
         left = x - 50
         top = y - 50
@@ -115,7 +115,7 @@ class MyApp:
 
         # Take screenshot
         self.screenshot = ImageGrab.grab(bbox=(left, top, right, bottom))
-
+        pyautogui.move(-50, -50)
         # Find the window title of the window the screenshot was taken of
         window_list = gw.getWindowsAt(x, y)
         window_title = window_list[0].title if window_list else "Unknown Window"
@@ -228,10 +228,12 @@ class MyApp:
         gray_screenshot = cv2.cvtColor(screenshot_np, cv2.COLOR_BGR2GRAY)
 
         subfolders = [f.name for f in os.scandir("data") if f.is_dir()]
-        matching_subfolders = [sf for sf in subfolders if sf.lower() in active_window.title.lower()]
-        if not matching_subfolders:
-            process_name = self.active_window_process_name()
-            matching_subfolders = [sf for sf in subfolders if sf.lower() in process_name.lower()]
+        matching_subfolders_from_title = [sf for sf in subfolders if sf.lower() in active_window.title.lower()]
+
+        process_name = self.active_window_process_name()
+        matching_subfolders_from_process = [sf for sf in subfolders if sf.lower() in process_name.lower()]
+
+        matching_subfolders = list(set(matching_subfolders_from_title + matching_subfolders_from_process))
 
         if not matching_subfolders:
             self.debug_print(f"No matching subfolders found for '{active_window.title}' or '{process_name}'.")
