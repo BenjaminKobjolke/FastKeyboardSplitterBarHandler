@@ -1,18 +1,27 @@
 import cv2
 import numpy as np
+import psutil
 import pygetwindow as gw
 import pyautogui
 import keyboard
 import ctypes
-import os
 import time
-from tkinter import Tk, Label, Button, Entry, Text, Scrollbar, END
+
+import win32gui
+import win32process
+from PIL import ImageGrab
+from tkinter import Tk, Text, Scrollbar, END, simpledialog
 import os
 from elevate import elevate
+import queue
 
 main_hotkey = "ctrl+alt+F10"
+screenshot_hotkey = "ctrl+alt+F9"
+data_folder = "data"
 
 elevate(show_console=False)
+
+
 class MyApp:
     pyautogui.PAUSE = 0.1
     # Configure mouse movement speed
@@ -24,10 +33,14 @@ class MyApp:
 
     # ... (other imports and variables)
     initial_mouse_position = None
+    screenshot = None
+    last_window_title = None
+    last_proccess_name = None
 
     def __init__(self, root):
 
         self.root = root
+        self.q = queue.Queue()
         # Dark theme styles
         root.configure(bg='#2E2E2E')
         root.title("keyboard-splitter-bar-handler")
@@ -38,10 +51,85 @@ class MyApp:
         self.textarea = Text(root, wrap='word', yscrollcommand=self.scrollbar.set, bg='#555555', fg='#FFFFFF')
         self.textarea.pack()
 
-        keyboard.add_hotkey(main_hotkey, self.search_splitter_bars)
-
+        self.setup_hotkeys()
         # keyboard.wait()
 
+    def get_next_filename(self, folder_path, base_filename):
+        counter = 1
+        while True:
+            filename = f"{base_filename}_{counter}.png"
+            if not os.path.exists(os.path.join(folder_path, filename)):
+                return filename
+            counter += 1
+
+    def check_queue(self):
+        try:
+            task = self.q.get_nowait()
+            if task == "askstring":
+                self.debug_print("yes")
+                subfolder_name = simpledialog.askstring("Input", "Enter the subfolder name to save screenshot in:", initialvalue=self.last_window_title + " - " + self.last_proccess_name)
+                print(subfolder_name)
+                self.save_screenshot(subfolder_name)
+                return
+        except queue.Empty:
+            pass
+
+        root.after(100, self.check_queue)
+
+    def active_window_process_name(self):
+        try:
+            pid = win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())
+            return psutil.Process(pid[-1]).name()
+        except:
+            pass
+
+    def take_screenshot(self):
+        root.after(100, self.check_queue)
+        self.debug_print("Taking screenshot" + "\n")
+        time.sleep(1)  # wait for 5 seconds
+
+        # Get mouse position
+        x, y = pyautogui.position()
+
+        # Define area around the mouse position (200x100 px)
+        left = x - 50
+        top = y - 50
+        right = x + 50
+        bottom = y + 50
+
+        # Take screenshot
+        self.screenshot = ImageGrab.grab(bbox=(left, top, right, bottom))
+
+        # Find the window title of the window the screenshot was taken of
+        window_list = gw.getWindowsAt(x, y)
+        window_title = window_list[0].title if window_list else "Unknown Window"
+        self.last_window_title = window_title
+        self.debug_print(f"Window title: {window_title}" + "\n")
+
+        self.last_proccess_name = self.active_window_process_name()
+        self.q.put("askstring")
+
+    def save_screenshot(self, subfolder_name):
+        if not subfolder_name:
+            return
+        self.debug_print(f"Subfolder name: {subfolder_name}" + "\n")
+        # Create dataand subfolder if not exists
+        if not os.path.exists(data_folder):
+            os.makedirs(data_folder)
+
+        full_subfolder_path = os.path.join(data_folder, subfolder_name)
+        self.debug_print(f"Saving screenshot to {full_subfolder_path}" + "\n")
+        if not os.path.exists(full_subfolder_path):
+            os.makedirs(full_subfolder_path)
+
+        # Check if screenshot.png already exists
+        if os.path.exists(os.path.join(full_subfolder_path, "screenshot.png")):
+            filename = self.get_next_filename(full_subfolder_path, "screenshot")
+        else:
+            filename = "screenshot.png"
+
+        # Save the image
+        self.screenshot.save(os.path.join(full_subfolder_path, filename))
 
     def is_admin(self):
         try:
@@ -60,7 +148,7 @@ class MyApp:
         self.mouse_is_pressed = False
         pyautogui.moveTo(self.initial_mouse_position[0], self.initial_mouse_position[1])
         keyboard.unhook_all()
-        keyboard.add_hotkey(main_hotkey, self.search_splitter_bars)
+        self.setup_hotkeys()
         self.hooked_keys = []
 
     def mouse_move(self, e):
@@ -92,6 +180,10 @@ class MyApp:
             elif e.name.lower() == 'esc':
                 self.end_mouse_drag()
 
+    def setup_hotkeys(self):
+        keyboard.add_hotkey(main_hotkey, self.search_splitter_bars)
+        keyboard.add_hotkey(screenshot_hotkey, self.take_screenshot)
+
     # Function to capture the screenshot and find the splitter bars
     def search_splitter_bars(self):
         active_window = gw.getActiveWindow()
@@ -105,13 +197,19 @@ class MyApp:
 
         subfolders = [f.name for f in os.scandir("data") if f.is_dir()]
         matching_subfolders = [sf for sf in subfolders if sf.lower() in active_window.title.lower()]
+        if not matching_subfolders:
+            process_name = self.active_window_process_name()
+            matching_subfolders = [sf for sf in subfolders if sf.lower() in process_name.lower()]
 
+        if not matching_subfolders:
+            self.debug_print(f"No matching subfolders found for '{active_window.title}' or '{process_name}'.")
+            return
         # Remember the initial mouse position
         self.initial_mouse_position = pyautogui.position()
 
         for folder in matching_subfolders:
             folder_path = os.path.join("data", folder)
-            #print("checking folder " + folder_path);
+            # print("checking folder " + folder_path);
             for filename in os.listdir(folder_path):
                 if filename.endswith(".png"):
                     template = cv2.imread(os.path.join(folder_path, filename), 0)
@@ -162,7 +260,6 @@ class MyApp:
                         # keyboard.add_hotkey('ctrl+F10', search_splitter_bars)
                         return
 
-        print("No match found")
         self.debug_print("No match found" + "\n")
 
 
