@@ -1,3 +1,5 @@
+from typing import Optional
+
 import cv2
 import numpy as np
 import psutil
@@ -6,7 +8,6 @@ import pyautogui
 import keyboard
 import ctypes
 import time
-
 import win32gui
 import win32process
 from PIL import ImageGrab
@@ -14,7 +15,6 @@ from tkinter import Tk, Text, Scrollbar, END, simpledialog, Entry, Button, Label
 import os
 from elevate import elevate
 import queue
-import sys
 from PyHotKey import Key, keyboard_manager as manager
 
 main_hotkey = "alt+shift+W"
@@ -64,9 +64,11 @@ class MyApp:
 
         self.setup_hotkeys()
 
+    '''
     def on_submit(self):
         received_data = self.text_box.get()
         self.label.config(text=f"Received: {received_data}")
+    '''
 
     def get_next_filename(self, folder_path, base_filename):
         counter = 1
@@ -81,9 +83,8 @@ class MyApp:
             task = self.q.get_nowait()
             if task == "askstring":
                 self.debug_print("yes")
-                subfolder_name = simpledialog.askstring("Input", "Enter the subfolder name to save screenshot in:",
+                subfolder_name: Optional[str] = simpledialog.askstring("Input", "Enter the subfolder name to save screenshot in:",
                                                         initialvalue=self.last_window_title + " - " + self.last_proccess_name)
-                print(subfolder_name)
                 self.save_screenshot(subfolder_name)
                 return
         except queue.Empty:
