@@ -1,1 +1,2 @@
-pip install elevate
+call pip install elevate
+call pip opencv-python
