@@ -16,12 +16,16 @@ import os
 from elevate import elevate
 import queue
 from PyHotKey import Key, keyboard_manager as manager
+import win32con
 
 main_hotkey = "alt+shift+W"
 screenshot_hotkey = "ctrl+alt+F9"
 data_folder = "data"
 
 elevate(show_console=False)
+
+# Capture the handle of the last active window before the Tkinter window is created
+last_active_window = win32gui.GetForegroundWindow()
 
 class MyApp:
     pyautogui.PAUSE = 0.1
@@ -63,6 +67,16 @@ class MyApp:
         '''
 
         self.setup_hotkeys()
+
+        # Minimize the window on startup
+        self.root.iconify()
+
+        self.root.after(100, self.focus_on_last_window)
+
+    def focus_on_last_window(self):
+        global last_active_window
+        win32gui.ShowWindow(last_active_window, win32con.SW_RESTORE)
+        win32gui.SetForegroundWindow(last_active_window)
 
     '''
     def on_submit(self):
@@ -168,6 +182,7 @@ class MyApp:
         self.hooked_keys = []
 
     def mouse_move(self, e):
+        pyautogui.mouseDown()
         current_time = time.time() * 1000  # Get the current time in milliseconds
 
         if current_time - self.last_key_time < 10:  # 200 milliseconds threshold
