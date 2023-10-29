@@ -191,7 +191,7 @@ class MyApp:
         self.hooked_keys = []
 
     def mouse_move(self, e):
-        pyautogui.mouseDown()
+        #pyautogui.mouseDown()
         current_time = time.time() * 1000  # Get the current time in milliseconds
 
         if current_time - self.last_key_time < 10:  # 200 milliseconds threshold
