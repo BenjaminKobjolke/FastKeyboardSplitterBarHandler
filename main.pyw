@@ -1,5 +1,4 @@
 from typing import Optional
-
 import cv2
 import numpy as np
 import psutil
@@ -17,6 +16,10 @@ from elevate import elevate
 import queue
 from PyHotKey import Key, keyboard_manager as manager
 import win32con
+import win32event
+import win32api
+import sys
+import winerror
 
 main_hotkey = "alt+shift+W"
 screenshot_hotkey = "ctrl+alt+F9"
@@ -26,6 +29,12 @@ elevate(show_console=False)
 
 # Capture the handle of the last active window before the Tkinter window is created
 last_active_window = win32gui.GetForegroundWindow()
+
+mutex = win32event.CreateMutex(None, 1, 'fast-keyboard-splitter-bar-handler')
+if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+    mutex = None
+    print("Another instance of this application is already running.")
+    sys.exit(1)
 
 class MyApp:
     pyautogui.PAUSE = 0.1
@@ -316,3 +325,7 @@ class MyApp:
 root = Tk()
 app = MyApp(root)
 root.mainloop()
+
+# Release the mutex when application exits
+if mutex:
+    win32api.CloseHandle(mutex)
