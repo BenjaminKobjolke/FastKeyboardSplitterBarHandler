@@ -36,6 +36,7 @@ if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
     print("Another instance of this application is already running.")
     sys.exit(1)
 
+
 class MyApp:
     pyautogui.PAUSE = 0.1
     # Configure mouse movement speed
@@ -106,8 +107,9 @@ class MyApp:
             task = self.q.get_nowait()
             if task == "askstring":
                 self.debug_print("yes")
-                subfolder_name: Optional[str] = simpledialog.askstring("Input", "Enter the subfolder name to save screenshot in:",
-                                                        initialvalue=self.last_window_title + " - " + self.last_proccess_name)
+                subfolder_name: Optional[str] = simpledialog.askstring("Input",
+                                                                       "Enter the subfolder name to save screenshot in:",
+                                                                       initialvalue=self.last_window_title + " - " + self.last_proccess_name)
                 self.save_screenshot(subfolder_name)
                 return
         except queue.Empty:
@@ -191,7 +193,7 @@ class MyApp:
         self.hooked_keys = []
 
     def mouse_move(self, e):
-        #pyautogui.mouseDown()
+        # pyautogui.mouseDown()
         current_time = time.time() * 1000  # Get the current time in milliseconds
 
         if current_time - self.last_key_time < 10:  # 200 milliseconds threshold
@@ -222,7 +224,7 @@ class MyApp:
 
     def setup_hotkeys(self):
         manager.suppress = True
-        id1 = manager.register_hotkey([Key.shift_l, Key.alt_l, 'w'], None,self.search_splitter_bars)
+        id1 = manager.register_hotkey([Key.shift_l, Key.alt_l, 'w'], None, self.search_splitter_bars)
         if -1 == id1:
             print('Already registered!')
         elif 0 == id1:
@@ -281,42 +283,49 @@ class MyApp:
                     threshold = 0.8
                     loc = np.where(res >= threshold)
 
+                    border_limit = 50
+
                     for pt in zip(*loc[::-1]):
-                        screen_x = pt[0] + active_window.left
-                        screen_y = pt[1] + active_window.top
-                        target_x = screen_x + (template.shape[1] // 2)
-                        target_y = screen_y + (template.shape[0] // 2)
+                        # Check if the match is within the border limit
+                        if (pt[0] > border_limit and
+                            pt[1] > border_limit and
+                            pt[0] + template.shape[1] < active_window.width - border_limit and
+                            pt[1] + template.shape[0] < active_window.height - border_limit):
+                            screen_x = pt[0] + active_window.left
+                            screen_y = pt[1] + active_window.top
+                            target_x = screen_x + (template.shape[1] // 2)
+                            target_y = screen_y + (template.shape[0] // 2)
 
-                        pyautogui.moveTo(target_x, target_y)
-                        # Once the mouse is moved to the desired position and pressed down:
-                        pyautogui.mouseDown()
-                        mouse_is_pressed = True
-                        self.hooked_keys.append(keyboard.hook_key('h', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('j', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('k', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('l', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('H', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('J', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('K', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('L', self.mouse_move, suppress=True))
+                            pyautogui.moveTo(target_x, target_y)
+                            # Once the mouse is moved to the desired position and pressed down:
+                            pyautogui.mouseDown()
+                            mouse_is_pressed = True
+                            self.hooked_keys.append(keyboard.hook_key('h', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('j', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('k', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('l', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('H', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('J', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('K', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('L', self.mouse_move, suppress=True))
 
-                        self.hooked_keys.append(keyboard.hook_key('w', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('a', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('s', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('d', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('W', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('A', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('S', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('D', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('w', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('a', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('s', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('d', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('W', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('A', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('S', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('D', self.mouse_move, suppress=True))
 
-                        self.hooked_keys.append(keyboard.hook_key('left', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('right', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('up', self.mouse_move, suppress=True))
-                        self.hooked_keys.append(keyboard.hook_key('down', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('left', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('right', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('up', self.mouse_move, suppress=True))
+                            self.hooked_keys.append(keyboard.hook_key('down', self.mouse_move, suppress=True))
 
-                        self.hooked_keys.append(keyboard.hook_key('ESC', self.mouse_move, suppress=True))
-                        # keyboard.add_hotkey('ctrl+F10', search_splitter_bars)
-                        return True
+                            self.hooked_keys.append(keyboard.hook_key('ESC', self.mouse_move, suppress=True))
+                            # keyboard.add_hotkey('ctrl+F10', search_splitter_bars)
+                            return True
 
         self.debug_print("No match found" + "\n")
         return True
