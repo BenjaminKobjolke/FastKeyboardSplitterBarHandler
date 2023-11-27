@@ -20,15 +20,21 @@ import win32event
 import win32api
 import sys
 import winerror
+import tkinter as tk
+import threading
+
+# set to true when working on this project
+is_debug = True
 
 main_hotkey = "alt+shift+W"
 screenshot_hotkey = "ctrl+alt+F9"
 data_folder = "data"
 
-elevate(show_console=False)
+if not is_debug:
+    elevate(show_console=False)
 
 # Capture the handle of the last active window before the Tkinter window is created
-last_active_window = win32gui.GetForegroundWindow()
+
 
 mutex = win32event.CreateMutex(None, 1, 'fast-keyboard-splitter-bar-handler')
 if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
@@ -38,6 +44,11 @@ if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
 
 
 class MyApp:
+    last_active_window = None
+    mouse_is_pressed = False  # Flag to keep track of mouse state
+    splitterbar_coordinates = []
+    overlay = None
+    canvas = None
     pyautogui.PAUSE = 0.1
     # Configure mouse movement speed
     MOUSE_SPEED = 15
@@ -53,6 +64,7 @@ class MyApp:
     last_proccess_name = None
 
     def __init__(self, root):
+        self.last_active_window = win32gui.GetForegroundWindow()
 
         self.root = root
         self.q = queue.Queue()
@@ -79,14 +91,13 @@ class MyApp:
         self.setup_hotkeys()
 
         # Minimize the window on startup
-        self.root.iconify()
-
-        self.root.after(100, self.focus_on_last_window)
+        if not is_debug:
+            self.root.iconify()
+            self.root.after(100, self.focus_on_last_window)
 
     def focus_on_last_window(self):
-        global last_active_window
-        win32gui.ShowWindow(last_active_window, win32con.SW_RESTORE)
-        win32gui.SetForegroundWindow(last_active_window)
+        win32gui.ShowWindow(self.last_active_window, win32con.SW_RESTORE)
+        win32gui.SetForegroundWindow(self.last_active_window)
 
     '''
     def on_submit(self):
@@ -178,8 +189,6 @@ class MyApp:
         except:
             return False
 
-    mouse_is_pressed = False  # Flag to keep track of mouse state
-
     def debug_print(self, text):
         self.textarea.insert(END, text)
         self.textarea.see(END)
@@ -224,7 +233,7 @@ class MyApp:
 
     def setup_hotkeys(self):
         manager.suppress = True
-        id1 = manager.register_hotkey([Key.shift_l, Key.alt_l, 'w'], None, self.search_splitter_bars)
+        id1 = manager.register_hotkey([Key.shift_l, Key.alt_l, 'w'], None, self.main_hotkey_pressed)
         if -1 == id1:
             print('Already registered!')
         elif 0 == id1:
@@ -242,10 +251,135 @@ class MyApp:
         # keyboard.add_hotkey(main_hotkey, self.search_splitter_bars, suppress=True)
         # keyboard.add_hotkey(screenshot_hotkey, self.take_screenshot, suppress=True)
 
+    def main_hotkey_pressed(self):
+        self.last_active_window = win32gui.GetForegroundWindow()
+        self.splitterbar_coordinates = []
+        self.search_splitter_bars()
+
+    def create_overlay(self):
+        print("create_overlay")
+        # Create the overlay window
+        self.overlay = tk.Tk()
+        self.overlay.overrideredirect(True)
+        self.overlay.attributes('-topmost', True)
+        self.overlay.attributes('-transparentcolor', 'green')
+        self.canvas = tk.Canvas(self.overlay, bg='green', highlightthickness=0)
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.overlay.withdraw()  # Start with the overlay hidden
+
+    def show_overlay(self):
+        print("show_overlay")
+        if self.overlay is None:
+            self.create_overlay()
+        self.schedule_overlay_update()
+
+    def schedule_overlay_update(self):
+        # Schedule the overlay update in the main Tkinter loop
+        self.root.after(10, self.update_overlay)  # Adjust the time as needed
+
+    def update_overlay(self):
+        print("update_overlay")
+        try:
+            # Get the active window dimensions and position
+            active_window = gw.getActiveWindow()
+            if not active_window:
+                print("No active window found.")
+                return
+
+            win_x, win_y, win_width, win_height = active_window.left, active_window.top, active_window.width, active_window.height
+            if self.overlay:
+                print(f"Setting geometry: {win_width}x{win_height}+{win_x}+{win_y}")
+                self.overlay.geometry(f"{win_width}x{win_height}+{win_x}+{win_y}")
+                # Clear the canvas of old drawings
+                self.canvas.delete("all")
+
+        except Exception as e:
+            print(f"Error in update_overlay: {e}")
+            self.schedule_overlay_update()  # Reschedule the next update
+
+        # Update the overlay geometry
+        if self.overlay:
+            # Redraw on the existing canvas
+            circle_diameter = 50 * 1.1  # 10% larger than the original size
+            radius = circle_diameter / 2
+            counter = 1
+            lenght = len(self.splitterbar_coordinates)
+            print(f"lenght: {lenght}")
+            for coordinate in self.splitterbar_coordinates:
+                print(counter)
+                circle_x = coordinate[0]
+                circle_y = coordinate[1]
+                print(f"Drawing circle at {circle_x}, {circle_y}")
+                self.canvas.create_oval(circle_x - radius, circle_y - radius, circle_x + radius, circle_y + radius,
+                                        fill='red')
+                self.canvas.create_text(circle_x, circle_y, text=str(counter), font=("Arial", int(radius), "bold"),
+                                        fill="white")
+                counter += 1
+
+        print("waiting for input")
+        self.hooked_keys.append(keyboard.hook_key('1', self.overlay_digit_pressed, suppress=True))
+        self.overlay.deiconify()  # Show the overlay
+
+    def overlay_digit_pressed(self, e):
+        print("overlay_digit_pressed")
+        keyboard.unhook_all()
+
+        debug_info = f"Key {e.name} - {e.scan_code} is pressed." + "\n"
+        print(debug_info)
+        array_index = int(e.name) - 1
+        coordinate = self.splitterbar_coordinates[array_index]
+        print(f"Moving mouse to {coordinate[0]}, {coordinate[1]}")
+
+        pyautogui.moveTo(coordinate[2], coordinate[3])
+        # Once the mouse is moved to the desired position and pressed down:
+        self.hooked_keys.append(keyboard.hook_key('h', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('j', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('k', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('l', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('H', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('J', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('K', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('L', self.mouse_move, suppress=True))
+
+        self.hooked_keys.append(keyboard.hook_key('w', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('a', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('s', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('d', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('W', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('A', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('S', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('D', self.mouse_move, suppress=True))
+
+        self.hooked_keys.append(keyboard.hook_key('left', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('right', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('up', self.mouse_move, suppress=True))
+        self.hooked_keys.append(keyboard.hook_key('down', self.mouse_move, suppress=True))
+
+        self.hooked_keys.append(keyboard.hook_key('ESC', self.mouse_move, suppress=True))
+
+        self.root.after(10, self.enable_mouse_drag)
+
+    def enable_mouse_drag(self):
+        self.hide_overlay()
+        self.focus_on_last_window()
+        pyautogui.mouseDown()
+
+        pyautogui.mouseDown()
+        self.mouse_is_pressed = True
+
+    def hide_overlay(self):
+        if self.overlay:
+            print("OK!")
+            self.canvas.delete("all")
+            self.overlay.withdraw()  # Hide the overlay
+
+    def close_overlay(self):
+        self.overlay.destroy()
+
     # Function to capture the screenshot and find the splitter bars
     def search_splitter_bars(self):
         active_window = gw.getActiveWindow()
-        print(active_window.title)
+        # print(active_window.title)
 
         # Take a screenshot of the active window
         screenshot = pyautogui.screenshot(
@@ -267,6 +401,7 @@ class MyApp:
         # Remember the initial mouse position
         self.initial_mouse_position = pyautogui.position()
 
+        self.splitterbar_coordinates = []
         for folder in matching_subfolders:
             folder_path = os.path.join("data", folder)
             # print("checking folder " + folder_path);
@@ -285,54 +420,43 @@ class MyApp:
 
                     border_limit = 50
 
+                    coordinates_found = False
                     for pt in zip(*loc[::-1]):
+                        if coordinates_found:
+                            break
                         # Check if the match is within the border limit
                         if (pt[0] > border_limit and
-                            pt[1] > border_limit and
-                            pt[0] + template.shape[1] < active_window.width - border_limit and
-                            pt[1] + template.shape[0] < active_window.height - border_limit):
+                                pt[1] > border_limit and
+                                pt[0] + template.shape[1] < active_window.width - border_limit and
+                                pt[1] + template.shape[0] < active_window.height - border_limit):
+                            # print(active_window.left, active_window.top)
+
                             screen_x = pt[0] + active_window.left
                             screen_y = pt[1] + active_window.top
                             target_x = screen_x + (template.shape[1] // 2)
                             target_y = screen_y + (template.shape[0] // 2)
 
-                            pyautogui.moveTo(target_x, target_y)
-                            # Once the mouse is moved to the desired position and pressed down:
-                            pyautogui.mouseDown()
-                            mouse_is_pressed = True
-                            self.hooked_keys.append(keyboard.hook_key('h', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('j', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('k', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('l', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('H', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('J', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('K', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('L', self.mouse_move, suppress=True))
+                            target_relative_x = pt[0] + (template.shape[1] // 2)
+                            target_relative_y = pt[1] + (template.shape[0] // 2)
+                            # print(pt[0], pt[1])
+                            window_x = active_window.left - pt[0]
+                            window_y = active_window.top - pt[1]
+                            self.splitterbar_coordinates.append(
+                                (target_relative_x, target_relative_y, target_x, target_y))
+                            # self.splitterbar_coordinates = [(100, 100, 0, 0), (200, 200, 0, 0)]
+                            coordinates_found = True
 
-                            self.hooked_keys.append(keyboard.hook_key('w', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('a', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('s', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('d', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('W', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('A', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('S', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('D', self.mouse_move, suppress=True))
-
-                            self.hooked_keys.append(keyboard.hook_key('left', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('right', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('up', self.mouse_move, suppress=True))
-                            self.hooked_keys.append(keyboard.hook_key('down', self.mouse_move, suppress=True))
-
-                            self.hooked_keys.append(keyboard.hook_key('ESC', self.mouse_move, suppress=True))
-                            # keyboard.add_hotkey('ctrl+F10', search_splitter_bars)
-                            return True
+        if self.splitterbar_coordinates not in (None, []):
+            self.show_overlay()
+            return True
 
         self.debug_print("No match found" + "\n")
-        return True
+        return False
 
 
 root = Tk()
 app = MyApp(root)
+app.show_overlay()
 root.mainloop()
 
 # Release the mutex when application exits
