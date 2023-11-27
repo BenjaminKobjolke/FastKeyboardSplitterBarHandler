@@ -136,18 +136,17 @@ class MyApp:
             pass
 
     def take_screenshot(self):
-        root.after(100, self.check_queue)
         self.debug_print("Taking screenshot" + "\n")
 
         # Get mouse position
         x, y = pyautogui.position()
         pyautogui.move(50, 50)
-        time.sleep(1)  # wait for 5 seconds
+        time.sleep(2)  # wait for 5 seconds
         # Define area around the mouse position (200x100 px)
-        left = x - 50
-        top = y - 50
-        right = x + 50
-        bottom = y + 50
+        left = x - 25
+        top = y - 25
+        right = x + 25
+        bottom = y + 25
 
         # Take screenshot
         self.screenshot = ImageGrab.grab(bbox=(left, top, right, bottom))
@@ -159,7 +158,9 @@ class MyApp:
         self.debug_print(f"Window title: {window_title}" + "\n")
 
         self.last_proccess_name = self.active_window_process_name()
+        root.after(100, self.check_queue)
         self.q.put("askstring")
+
 
     def save_screenshot(self, subfolder_name):
         if not subfolder_name:
@@ -369,7 +370,6 @@ class MyApp:
 
     def hide_overlay(self):
         if self.overlay:
-            print("OK!")
             self.canvas.delete("all")
             self.overlay.withdraw()  # Hide the overlay
 
