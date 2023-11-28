@@ -1,3 +1,9 @@
+# Installation
+
+- download the latest release
+- unzip
+- run fksbh.exe
+
 # Usage
 
 # Step 1: create a screenshot of the splitter bars
