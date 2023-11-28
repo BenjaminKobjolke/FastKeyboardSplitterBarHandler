@@ -63,6 +63,9 @@ class MyApp:
     last_window_title = None
     last_proccess_name = None
 
+    MATCH_THRESHOLD = 0.8
+    BORDER_LIMIT = 50
+
     def __init__(self, root):
         self.last_active_window = win32gui.GetForegroundWindow()
 
@@ -70,7 +73,7 @@ class MyApp:
         self.q = queue.Queue()
         # Dark theme styles
         root.configure(bg='#2E2E2E')
-        root.title("keyboard-splitter-bar-handler")
+        root.title("FastKeyboardSplitterBarHandler")
 
         self.scrollbar = Scrollbar(root, bg='#555555')
         self.scrollbar.pack(side='right', fill='y')
@@ -279,7 +282,6 @@ class MyApp:
         self.root.after(10, self.update_overlay)  # Adjust the time as needed
 
     def update_overlay(self):
-        print("update_overlay")
         try:
             # Get the active window dimensions and position
             active_window = gw.getActiveWindow()
@@ -289,7 +291,7 @@ class MyApp:
 
             win_x, win_y, win_width, win_height = active_window.left, active_window.top, active_window.width, active_window.height
             if self.overlay:
-                print(f"Setting geometry: {win_width}x{win_height}+{win_x}+{win_y}")
+                #print(f"Setting geometry: {win_width}x{win_height}+{win_x}+{win_y}")
                 self.overlay.geometry(f"{win_width}x{win_height}+{win_x}+{win_y}")
                 # Clear the canvas of old drawings
                 self.canvas.delete("all")
@@ -305,21 +307,30 @@ class MyApp:
             radius = circle_diameter / 2
             counter = 1
             lenght = len(self.splitterbar_coordinates)
-            print(f"lenght: {lenght}")
+            self.hooked_keys.append(keyboard.hook_key('ESC', self.overlay_esc_pressed, suppress=True))
             for coordinate in self.splitterbar_coordinates:
-                print(counter)
                 circle_x = coordinate[0]
                 circle_y = coordinate[1]
-                print(f"Drawing circle at {circle_x}, {circle_y}")
+                #print(f"Drawing circle at {circle_x}, {circle_y}")
                 self.canvas.create_oval(circle_x - radius, circle_y - radius, circle_x + radius, circle_y + radius,
                                         fill='red')
                 self.canvas.create_text(circle_x, circle_y, text=str(counter), font=("Arial", int(radius), "bold"),
                                         fill="white")
                 counter += 1
 
-        print("waiting for input")
-        self.hooked_keys.append(keyboard.hook_key('1', self.overlay_digit_pressed, suppress=True))
+        #print("waiting for input")
+        counter = 1
+        for coordinate in self.splitterbar_coordinates:
+            self.hooked_keys.append(keyboard.hook_key(str(counter), self.overlay_digit_pressed, suppress=True))
+            counter += 1
+
         self.overlay.deiconify()  # Show the overlay
+
+    def overlay_esc_pressed(self, e):
+        print("overlay_esc_pressed")
+        keyboard.unhook_all()
+        self.root.after(100, self.hide_overlay)
+        self.setup_hotkeys()
 
     def overlay_digit_pressed(self, e):
         print("overlay_digit_pressed")
@@ -370,23 +381,17 @@ class MyApp:
 
     def hide_overlay(self):
         if self.overlay:
-            self.canvas.delete("all")
-            self.overlay.withdraw()  # Hide the overlay
+            try:
+                self.canvas.delete("all")
+                self.overlay.withdraw()
+            except Exception as e:
+                print(f"Error in update_overlay: {e}")
+                self.root.after(10, self.hide_overlay)
 
     def close_overlay(self):
         self.overlay.destroy()
 
-    # Function to capture the screenshot and find the splitter bars
-    def search_splitter_bars(self):
-        active_window = gw.getActiveWindow()
-        # print(active_window.title)
-
-        # Take a screenshot of the active window
-        screenshot = pyautogui.screenshot(
-            region=(active_window.left, active_window.top, active_window.width, active_window.height))
-        screenshot_np = np.array(screenshot)
-        gray_screenshot = cv2.cvtColor(screenshot_np, cv2.COLOR_BGR2GRAY)
-
+    def get_matching_subfolders(self, active_window):
         subfolders = [f.name for f in os.scandir("data") if f.is_dir()]
         matching_subfolders_from_title = [sf for sf in subfolders if sf.lower() in active_window.title.lower()]
 
@@ -394,57 +399,24 @@ class MyApp:
         matching_subfolders_from_process = [sf for sf in subfolders if sf.lower() in process_name.lower()]
 
         matching_subfolders = list(set(matching_subfolders_from_title + matching_subfolders_from_process))
-
         if not matching_subfolders:
             self.debug_print(f"No matching subfolders found for '{active_window.title}' or '{process_name}'.")
+            return None
+        return matching_subfolders
+
+    def search_splitter_bars(self):
+        active_window = gw.getActiveWindow()
+        gray_screenshot = self.get_screenshot(active_window)
+
+        matching_subfolders = self.get_matching_subfolders(active_window)
+
+        if matching_subfolders is None:
+            self.debug_print(f"No matching subfolders found for '{active_window.title}'.")
             return True
         # Remember the initial mouse position
         self.initial_mouse_position = pyautogui.position()
 
-        self.splitterbar_coordinates = []
-        for folder in matching_subfolders:
-            folder_path = os.path.join("data", folder)
-            # print("checking folder " + folder_path);
-            for filename in os.listdir(folder_path):
-                if filename.endswith(".png"):
-                    template = cv2.imread(os.path.join(folder_path, filename), 0)
-
-                    if gray_screenshot.shape[0] < template.shape[0] or gray_screenshot.shape[1] < template.shape[1]:
-                        print(f"Screenshot for '{active_window.title}' is smaller than template. Skipping.")
-                        continue
-
-                    self.debug_print("Match found: " + filename + "\n")
-                    res = cv2.matchTemplate(gray_screenshot, template, cv2.TM_CCOEFF_NORMED)
-                    threshold = 0.8
-                    loc = np.where(res >= threshold)
-
-                    border_limit = 50
-
-                    coordinates_found = False
-                    for pt in zip(*loc[::-1]):
-                        if coordinates_found:
-                            break
-                        # Check if the match is within the border limit
-                        if (pt[0] > border_limit and
-                                pt[1] > border_limit and
-                                pt[0] + template.shape[1] < active_window.width - border_limit and
-                                pt[1] + template.shape[0] < active_window.height - border_limit):
-                            # print(active_window.left, active_window.top)
-
-                            screen_x = pt[0] + active_window.left
-                            screen_y = pt[1] + active_window.top
-                            target_x = screen_x + (template.shape[1] // 2)
-                            target_y = screen_y + (template.shape[0] // 2)
-
-                            target_relative_x = pt[0] + (template.shape[1] // 2)
-                            target_relative_y = pt[1] + (template.shape[0] // 2)
-                            # print(pt[0], pt[1])
-                            window_x = active_window.left - pt[0]
-                            window_y = active_window.top - pt[1]
-                            self.splitterbar_coordinates.append(
-                                (target_relative_x, target_relative_y, target_x, target_y))
-                            # self.splitterbar_coordinates = [(100, 100, 0, 0), (200, 200, 0, 0)]
-                            coordinates_found = True
+        self.splitterbar_coordinates = self.find_splitter_bars(active_window, gray_screenshot, matching_subfolders)
 
         if self.splitterbar_coordinates not in (None, []):
             self.show_overlay()
@@ -452,6 +424,68 @@ class MyApp:
 
         self.debug_print("No match found" + "\n")
         return False
+
+    def get_screenshot(self, active_window):
+        screenshot = pyautogui.screenshot(
+            region=(active_window.left, active_window.top, active_window.width, active_window.height))
+        screenshot_np = np.array(screenshot)
+        return cv2.cvtColor(screenshot_np, cv2.COLOR_BGR2GRAY)
+
+    def find_splitter_bars(self, active_window, gray_screenshot, matching_subfolders):
+        splitter_coordinates = []
+        filenames = self.get_filenames_for_matching_subfolders(matching_subfolders)
+        for filename in filenames:
+            template = cv2.imread(filename, 0)
+
+            if gray_screenshot.shape[0] < template.shape[0] or gray_screenshot.shape[1] < template.shape[1]:
+                print(f"Screenshot for '{active_window.title}' is smaller than template. Skipping.")
+                continue
+
+            #self.debug_print("Match found: " + filename + "\n")
+            res = cv2.matchTemplate(gray_screenshot, template, cv2.TM_CCOEFF_NORMED)
+            threshold = 0.8
+            loc = np.where(res >= threshold)
+
+            border_limit = 50
+
+            coordinates_found = False
+            for pt in zip(*loc[::-1]):
+                if coordinates_found:
+                    break
+                # Check if the match is within the border limit
+                if (pt[0] > border_limit and
+                        pt[1] > border_limit and
+                        pt[0] + template.shape[1] < active_window.width - border_limit and
+                        pt[1] + template.shape[0] < active_window.height - border_limit):
+                    # print(active_window.left, active_window.top)
+
+                    screen_x = pt[0] + active_window.left
+                    screen_y = pt[1] + active_window.top
+                    target_x = screen_x + (template.shape[1] // 2)
+                    target_y = screen_y + (template.shape[0] // 2)
+
+                    target_relative_x = pt[0] + (template.shape[1] // 2)
+                    target_relative_y = pt[1] + (template.shape[0] // 2)
+                    # print(pt[0], pt[1])
+                    window_x = active_window.left - pt[0]
+                    window_y = active_window.top - pt[1]
+                    splitter_coordinates.append(
+                        (target_relative_x, target_relative_y, target_x, target_y))
+                    # self.splitterbar_coordinates = [(100, 100, 0, 0), (200, 200, 0, 0)]
+                    coordinates_found = True
+
+        return splitter_coordinates
+
+    def get_filenames_for_matching_subfolders(self, matching_subfolders):
+        filenames = []
+        for folder in matching_subfolders:
+            folder_path = os.path.join("data", folder)
+            # print("checking folder " + folder_path);
+            for filename in os.listdir(folder_path):
+                if filename.endswith(".png"):
+                    filenames.append(os.path.join(folder_path, filename))
+
+        return filenames
 
 
 root = Tk()
