@@ -24,7 +24,7 @@ import tkinter as tk
 import math
 
 # set to true when working on this project
-is_debug = True
+is_debug = False
 
 main_hotkey = "alt+shift+W"
 screenshot_hotkey = "ctrl+alt+F9"
