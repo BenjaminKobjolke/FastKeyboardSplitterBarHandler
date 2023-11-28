@@ -1,3 +1,9 @@
+# Description
+
+Windows tool to drag the splitter bars with the keyboard only.
+
+![plot](./media/demo.gif)
+
 # Installation
 
 - download the latest release
