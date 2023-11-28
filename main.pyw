@@ -35,7 +35,6 @@ if not is_debug:
 
 # Capture the handle of the last active window before the Tkinter window is created
 
-
 mutex = win32event.CreateMutex(None, 1, 'fast-keyboard-splitter-bar-handler')
 if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
     mutex = None
@@ -80,18 +79,9 @@ class MyApp:
 
         self.textarea = Text(root, wrap='word', yscrollcommand=self.scrollbar.set, bg='#555555', fg='#FFFFFF')
         self.textarea.pack()
-        '''
-        self.text_box = Entry(root)
-        self.text_box.pack(pady=20)
-
-        self.button = Button(root, text="Submit", command=self.on_submit)
-        self.button.pack(pady=10)
-
-        self.label = Label(root, text="Waiting for message...")
-        self.label.pack(pady=20)
-        '''
 
         self.setup_hotkeys()
+        root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         # Minimize the window on startup
         '''
@@ -99,6 +89,11 @@ class MyApp:
             self.root.iconify()
             self.root.after(100, self.focus_on_last_window)
         '''
+
+    def on_close(self):
+        self.root.destroy()
+        exit(0)
+
     def focus_on_last_window(self):
         win32gui.ShowWindow(self.last_active_window, win32con.SW_RESTORE)
         win32gui.SetForegroundWindow(self.last_active_window)
@@ -308,8 +303,10 @@ class MyApp:
             self.hooked_keys.append(keyboard.hook_key('ESC', self.overlay_esc_pressed, suppress=True))
 
             for i, coordinate in enumerate(self.splitterbar_coordinates, start=1):
-                circle_x, circle_y = coordinate[2], coordinate[1]
+                circle_x, circle_y = coordinate[2], coordinate[3]
 
+                self.debug_print(f"Drawing circle {i} at {circle_x}, {circle_y}")
+                print(f"Drawing circle {i} at {circle_x}, {circle_y}")
                 if i < 10:
                     counter_text = str(i)
                     hook_key = str(i)
@@ -321,7 +318,6 @@ class MyApp:
                                         fill='red')
                 self.canvas.create_text(circle_x, circle_y, text=counter_text, font=("Arial", int(radius), "bold"),
                                         fill="white")
-                print(hook_key)
                 self.hooked_keys.append(keyboard.hook_key(hook_key, self.overlay_keyboard_pressed, suppress=True))
 
         self.debug_print("show overlay")
@@ -425,7 +421,7 @@ class MyApp:
             return True
         # Remember the initial mouse position
         self.initial_mouse_position = pyautogui.position()
-        self.debug_print("search_splitter_bars 123")
+        self.debug_print("search_splitter_bars")
         self.splitterbar_coordinates = self.find_splitter_bars(active_window, gray_screenshot, matching_subfolders)
 
         if self.splitterbar_coordinates not in (None, []):
@@ -495,13 +491,28 @@ class MyApp:
                 pt[0] + template_size[1] < window.width - border_limit and
                 pt[1] + template_size[0] < window.height - border_limit)
 
+    '''
+        pt = coordinates of the match in screen coordinates
+        window = active window
+        template_size = size of the screenshot image
+    '''
     def calculate_coordinates(self, pt, window, template_size):
+        '''
+            screen_x, screen_y = absolute cooridnates of the target on the screen
+        '''
+        print(f"pt: {pt}")
         screen_x = pt[0] + window.left
+        #print(f"screen_x: {screen_x}")
+
         screen_y = pt[1] + window.top
-        target_x = screen_x + (template_size[1] // 2)
-        target_y = screen_y + (template_size[0] // 2)
-        target_relative_x = pt[0] + (template_size[1] // 2)
-        target_relative_y = pt[1] + (template_size[0] // 2)
+        print(f"screen_y: {screen_y}")
+        print(window)
+        target_x = screen_x + (template_size[0] // 2)
+        target_y = screen_y + (template_size[1] // 2)
+        target_relative_x = pt[0] + (template_size[0] // 2)
+        target_relative_y = pt[1] + (template_size[1] // 2)
+        print("target_relative_y: " + str(target_relative_y))
+
         return target_x, target_y, target_relative_x, target_relative_y
 
     def is_close_to_existing(self, coordinates, new_x, new_y, proximity=100):
