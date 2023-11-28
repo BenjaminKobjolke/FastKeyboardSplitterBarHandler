@@ -21,7 +21,7 @@ import win32api
 import sys
 import winerror
 import tkinter as tk
-import threading
+import math
 
 # set to true when working on this project
 is_debug = True
@@ -94,10 +94,11 @@ class MyApp:
         self.setup_hotkeys()
 
         # Minimize the window on startup
+        '''
         if not is_debug:
             self.root.iconify()
             self.root.after(100, self.focus_on_last_window)
-
+        '''
     def focus_on_last_window(self):
         win32gui.ShowWindow(self.last_active_window, win32con.SW_RESTORE)
         win32gui.SetForegroundWindow(self.last_active_window)
@@ -120,7 +121,6 @@ class MyApp:
         try:
             task = self.q.get_nowait()
             if task == "askstring":
-                self.debug_print("yes")
                 subfolder_name: Optional[str] = simpledialog.askstring("Input",
                                                                        "Enter the subfolder name to save screenshot in:",
                                                                        initialvalue=self.last_window_title + " - " + self.last_proccess_name)
@@ -194,7 +194,7 @@ class MyApp:
             return False
 
     def debug_print(self, text):
-        self.textarea.insert(END, text)
+        self.textarea.insert(END, text + "\n")
         self.textarea.see(END)
 
     def end_mouse_drag(self):
@@ -239,29 +239,30 @@ class MyApp:
         manager.suppress = True
         id1 = manager.register_hotkey([Key.shift_l, Key.alt_l, 'w'], None, self.main_hotkey_pressed)
         if -1 == id1:
-            print('Already registered!')
+            self.debug_print('Already registered!')
         elif 0 == id1:
-            print('Invalid parameters!')
+            self.debug_print('Invalid parameters!')
         else:
-            print('Hotkey id: {}'.format(id1))
+            self.debug_print('Hotkey id: {}'.format(id1))
 
         id2 = manager.register_hotkey([Key.shift_l, Key.alt_l, 'e'], None, self.take_screenshot)
         if -1 == id2:
-            print('Already registered!')
+            self.debug_print('Already registered!')
         elif 0 == id2:
-            print('Invalid parameters!')
+            self.debug_print('Invalid parameters!')
         else:
-            print('Hotkey id: {}'.format(id2))
+            self.debug_print('Hotkey id: {}'.format(id2))
         # keyboard.add_hotkey(main_hotkey, self.search_splitter_bars, suppress=True)
         # keyboard.add_hotkey(screenshot_hotkey, self.take_screenshot, suppress=True)
 
     def main_hotkey_pressed(self):
+        self.debug_print("main_hotkey_pressed")
         self.last_active_window = win32gui.GetForegroundWindow()
         self.splitterbar_coordinates = []
         self.search_splitter_bars()
 
     def create_overlay(self):
-        print("create_overlay")
+        self.debug_print("create_overlay")
         # Create the overlay window
         self.overlay = tk.Tk()
         self.overlay.overrideredirect(True)
@@ -272,7 +273,7 @@ class MyApp:
         self.overlay.withdraw()  # Start with the overlay hidden
 
     def show_overlay(self):
-        print("show_overlay")
+        self.debug_print("show_overlay")
         if self.overlay is None:
             self.create_overlay()
         self.schedule_overlay_update()
@@ -286,12 +287,12 @@ class MyApp:
             # Get the active window dimensions and position
             active_window = gw.getActiveWindow()
             if not active_window:
-                print("No active window found.")
+                self.debug_print("No active window found.")
                 return
 
             win_x, win_y, win_width, win_height = active_window.left, active_window.top, active_window.width, active_window.height
             if self.overlay:
-                #print(f"Setting geometry: {win_width}x{win_height}+{win_x}+{win_y}")
+                #p rint(f"Setting geometry: {win_width}x{win_height}+{win_x}+{win_y}")
                 self.overlay.geometry(f"{win_width}x{win_height}+{win_x}+{win_y}")
                 # Clear the canvas of old drawings
                 self.canvas.delete("all")
@@ -300,49 +301,57 @@ class MyApp:
             print(f"Error in update_overlay: {e}")
             self.schedule_overlay_update()  # Reschedule the next update
 
-        # Update the overlay geometry
         if self.overlay:
-            # Redraw on the existing canvas
-            circle_diameter = 50 * 1.1  # 10% larger than the original size
+            circle_diameter = 50 * 1.1
             radius = circle_diameter / 2
-            counter = 1
-            lenght = len(self.splitterbar_coordinates)
+            self.canvas.delete("all")
             self.hooked_keys.append(keyboard.hook_key('ESC', self.overlay_esc_pressed, suppress=True))
-            for coordinate in self.splitterbar_coordinates:
-                circle_x = coordinate[0]
-                circle_y = coordinate[1]
-                #print(f"Drawing circle at {circle_x}, {circle_y}")
+
+            for i, coordinate in enumerate(self.splitterbar_coordinates, start=1):
+                circle_x, circle_y = coordinate[2], coordinate[1]
+
+                if i < 10:
+                    counter_text = str(i)
+                    hook_key = str(i)
+                else:
+                    counter_text = chr(87 + i)  # 87 + 10 = 97 ('a')
+                    hook_key = counter_text
+
                 self.canvas.create_oval(circle_x - radius, circle_y - radius, circle_x + radius, circle_y + radius,
                                         fill='red')
-                self.canvas.create_text(circle_x, circle_y, text=str(counter), font=("Arial", int(radius), "bold"),
+                self.canvas.create_text(circle_x, circle_y, text=counter_text, font=("Arial", int(radius), "bold"),
                                         fill="white")
-                counter += 1
+                print(hook_key)
+                self.hooked_keys.append(keyboard.hook_key(hook_key, self.overlay_keyboard_pressed, suppress=True))
 
-        #print("waiting for input")
-        counter = 1
-        for coordinate in self.splitterbar_coordinates:
-            self.hooked_keys.append(keyboard.hook_key(str(counter), self.overlay_digit_pressed, suppress=True))
-            counter += 1
-
+        self.debug_print("show overlay")
         self.overlay.deiconify()  # Show the overlay
 
     def overlay_esc_pressed(self, e):
-        print("overlay_esc_pressed")
+        self.debug_print("overlay_esc_pressed")
         keyboard.unhook_all()
         self.root.after(100, self.hide_overlay)
         self.setup_hotkeys()
 
-    def overlay_digit_pressed(self, e):
-        print("overlay_digit_pressed")
+    def overlay_keyboard_pressed(self, e):
+        #self.debug_print("overlay_digit_pressed")
         keyboard.unhook_all()
 
         debug_info = f"Key {e.name} - {e.scan_code} is pressed." + "\n"
-        print(debug_info)
-        array_index = int(e.name) - 1
+        #print(debug_info)
+        if e.name.isdigit():
+            # For digits, just convert to int and subtract 1
+            array_index = int(e.name) - 1
+        elif e.name.isalpha() and len(e.name) == 1:
+            # For letters, convert to lowercase, find its ASCII, and adjust the index
+            array_index = ord(e.name.lower()) - ord('a') + 9  # 'a' corresponds to the 10th element
+        else:
+            print(f"Invalid key pressed: {e.name}")
+            return
         coordinate = self.splitterbar_coordinates[array_index]
-        print(f"Moving mouse to {coordinate[0]}, {coordinate[1]}")
+        #print(f"Moving mouse to {coordinate[0]}, {coordinate[1]}")
 
-        pyautogui.moveTo(coordinate[2], coordinate[3])
+        pyautogui.moveTo(coordinate[0], coordinate[1])
         # Once the mouse is moved to the desired position and pressed down:
         self.hooked_keys.append(keyboard.hook_key('h', self.mouse_move, suppress=True))
         self.hooked_keys.append(keyboard.hook_key('j', self.mouse_move, suppress=True))
@@ -405,6 +414,7 @@ class MyApp:
         return matching_subfolders
 
     def search_splitter_bars(self):
+        self.debug_print("search_splitter_bars")
         active_window = gw.getActiveWindow()
         gray_screenshot = self.get_screenshot(active_window)
 
@@ -415,10 +425,11 @@ class MyApp:
             return True
         # Remember the initial mouse position
         self.initial_mouse_position = pyautogui.position()
-
+        self.debug_print("search_splitter_bars 123")
         self.splitterbar_coordinates = self.find_splitter_bars(active_window, gray_screenshot, matching_subfolders)
 
         if self.splitterbar_coordinates not in (None, []):
+            self.debug_print(f"Found {len(self.splitterbar_coordinates)} splitter bars.")
             self.show_overlay()
             return True
 
@@ -432,55 +443,78 @@ class MyApp:
         return cv2.cvtColor(screenshot_np, cv2.COLOR_BGR2GRAY)
 
     def find_splitter_bars(self, active_window, gray_screenshot, matching_subfolders):
-        splitter_coordinates = []
+        self.debug_print("find_splitter_bars")
+        all_matches = []
         filenames = self.get_filenames_for_matching_subfolders(matching_subfolders)
+
         for filename in filenames:
+            self.debug_print(f"Checking {filename}")
             template = cv2.imread(filename, 0)
 
             if gray_screenshot.shape[0] < template.shape[0] or gray_screenshot.shape[1] < template.shape[1]:
-                print(f"Screenshot for '{active_window.title}' is smaller than template. Skipping.")
+                self.debug_print(f"Screenshot for '{active_window.title}' is smaller than template. Skipping.")
                 continue
 
-            #self.debug_print("Match found: " + filename + "\n")
             res = cv2.matchTemplate(gray_screenshot, template, cv2.TM_CCOEFF_NORMED)
-            threshold = 0.8
-            loc = np.where(res >= threshold)
+            loc = np.where(res >= 0.8)
+            file_matches = []
 
-            border_limit = 50
-
-            coordinates_found = False
             for pt in zip(*loc[::-1]):
-                if coordinates_found:
-                    break
-                # Check if the match is within the border limit
-                if (pt[0] > border_limit and
-                        pt[1] > border_limit and
-                        pt[0] + template.shape[1] < active_window.width - border_limit and
-                        pt[1] + template.shape[0] < active_window.height - border_limit):
-                    # print(active_window.left, active_window.top)
+                if self.is_within_border_limit(pt, active_window, template.shape, 50):
+                    target_x, target_y, target_relative_x, target_relative_y = self.calculate_coordinates(pt,
+                                                                                                          active_window,
+                                                                                                          template.shape)
+                    file_matches.append((target_x, target_y, target_relative_x, target_relative_y))
 
-                    screen_x = pt[0] + active_window.left
-                    screen_y = pt[1] + active_window.top
-                    target_x = screen_x + (template.shape[1] // 2)
-                    target_y = screen_y + (template.shape[0] // 2)
+            # Apply proximity check to matches from this file
+            filtered_matches = self.filter_by_proximity(file_matches, proximity=100)
+            all_matches.extend(filtered_matches)
 
-                    target_relative_x = pt[0] + (template.shape[1] // 2)
-                    target_relative_y = pt[1] + (template.shape[0] // 2)
-                    # print(pt[0], pt[1])
-                    window_x = active_window.left - pt[0]
-                    window_y = active_window.top - pt[1]
-                    splitter_coordinates.append(
-                        (target_relative_x, target_relative_y, target_x, target_y))
-                    # self.splitterbar_coordinates = [(100, 100, 0, 0), (200, 200, 0, 0)]
-                    coordinates_found = True
+        self.debug_print(f"Total matches found: {len(all_matches)}")
+        return all_matches
 
-        return splitter_coordinates
+    def filter_by_proximity(self, coordinates_list, proximity):
+        filtered = []
+        for new_coords in coordinates_list:
+            if not self.is_too_close_to_existing(filtered, new_coords, proximity):
+                filtered.append(new_coords)
+        return filtered
+
+    def is_too_close_to_existing(self, existing_coords, new_coords, proximity):
+        for coords in existing_coords:
+            if self.calculate_distance(coords[0], coords[1], new_coords[0], new_coords[1]) < proximity:
+                return True
+        return False
+
+    def calculate_distance(self, x1, y1, x2, y2):
+        return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+    def is_within_border_limit(self, pt, window, template_size, border_limit):
+        return (pt[0] > border_limit and
+                pt[1] > border_limit and
+                pt[0] + template_size[1] < window.width - border_limit and
+                pt[1] + template_size[0] < window.height - border_limit)
+
+    def calculate_coordinates(self, pt, window, template_size):
+        screen_x = pt[0] + window.left
+        screen_y = pt[1] + window.top
+        target_x = screen_x + (template_size[1] // 2)
+        target_y = screen_y + (template_size[0] // 2)
+        target_relative_x = pt[0] + (template_size[1] // 2)
+        target_relative_y = pt[1] + (template_size[0] // 2)
+        return target_x, target_y, target_relative_x, target_relative_y
+
+    def is_close_to_existing(self, coordinates, new_x, new_y, proximity=100):
+        for x, y, _, _ in coordinates:
+            if abs(new_x - x) < proximity or abs(new_y - y) < proximity:
+                return True
+        return False
 
     def get_filenames_for_matching_subfolders(self, matching_subfolders):
         filenames = []
         for folder in matching_subfolders:
             folder_path = os.path.join("data", folder)
-            # print("checking folder " + folder_path);
+            # self.debug_print("checking folder " + folder_path);
             for filename in os.listdir(folder_path):
                 if filename.endswith(".png"):
                     filenames.append(os.path.join(folder_path, filename))
