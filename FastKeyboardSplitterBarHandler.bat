@@ -1,1 +1,1 @@
-start pythonw main.pyw
+elevate.exe pythonw main.pyw
