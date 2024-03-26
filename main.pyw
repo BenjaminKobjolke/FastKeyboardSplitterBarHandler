@@ -95,7 +95,7 @@ class MyApp:
         exit(0)
 
     def focus_on_last_window(self):
-        win32gui.ShowWindow(self.last_active_window, win32con.SW_RESTORE)
+        #win32gui.ShowWindow(self.last_active_window, win32con.SW_RESTORE)
         win32gui.SetForegroundWindow(self.last_active_window)
 
     '''
