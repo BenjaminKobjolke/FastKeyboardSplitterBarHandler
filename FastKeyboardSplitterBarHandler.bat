@@ -1,1 +1,1 @@
-elevate.exe pythonw main.pyw
+elevate.exe .venv\Scripts\pythonw.exe main.pyw
