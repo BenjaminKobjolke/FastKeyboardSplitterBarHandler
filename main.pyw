@@ -455,6 +455,8 @@ class MyApp:
             loc = np.where(res >= 0.8)
             file_matches = []
 
+            max_iterations = 10
+            iterations = 0
             for pt in zip(*loc[::-1]):
                 if self.is_within_border_limit(pt, active_window, template.shape, 50):
                     target_x, target_y, target_relative_x, target_relative_y = self.calculate_coordinates(pt,
@@ -462,6 +464,13 @@ class MyApp:
                                                                                                           template.shape)
                     file_matches.append((target_x, target_y, target_relative_x, target_relative_y))
 
+                iterations += 1
+                if iterations >= max_iterations:
+                    break
+
+            # if file_matches is 0, then no matches were found
+            if len(file_matches) == 0:
+                continue
             # Apply proximity check to matches from this file
             filtered_matches = self.filter_by_proximity(file_matches, proximity=100)
             all_matches.extend(filtered_matches)
