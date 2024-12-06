@@ -194,6 +194,7 @@ class MyApp:
 
     def end_mouse_drag(self):
         pyautogui.mouseUp()
+        time.sleep(1)
         self.mouse_is_pressed = False
         pyautogui.moveTo(self.initial_mouse_position[0], self.initial_mouse_position[1])
         keyboard.unhook_all()
@@ -203,6 +204,7 @@ class MyApp:
     def mouse_move(self, e):
         # pyautogui.mouseDown()
         current_time = time.time() * 1000  # Get the current time in milliseconds
+
 
         if current_time - self.last_key_time < 10:  # 200 milliseconds threshold
             return  # Skip this key press
@@ -214,7 +216,8 @@ class MyApp:
         debug_info = f"Key {e.name} - {e.scan_code} is pressed." + "\n"
         self.debug_print(debug_info)
         speed = self.MOUSE_SPEED
-
+        
+        print(e.name.lower())
         if e.name.upper() == e.name or shift_pressed:
             speed *= 4  # Double the speed
 
@@ -229,6 +232,8 @@ class MyApp:
                 pyautogui.moveRel(speed, 0, 0, pyautogui.linear, False, True)
             elif e.name.lower() == 'esc':
                 self.end_mouse_drag()
+            elif e.name.lower() == 'enter':
+                self.end_mouse_drag()                
 
     def setup_hotkeys(self):
         manager.suppress = True
@@ -373,6 +378,8 @@ class MyApp:
         self.hooked_keys.append(keyboard.hook_key('down', self.mouse_move, suppress=True))
 
         self.hooked_keys.append(keyboard.hook_key('ESC', self.mouse_move, suppress=True))
+        
+        self.hooked_keys.append(keyboard.hook_key('enter', self.mouse_move, suppress=True))        
 
         self.root.after(10, self.enable_mouse_drag)
 
@@ -471,6 +478,7 @@ class MyApp:
             # if file_matches is 0, then no matches were found
             if len(file_matches) == 0:
                 continue
+
             # Apply proximity check to matches from this file
             filtered_matches = self.filter_by_proximity(file_matches, proximity=100)
             all_matches.extend(filtered_matches)
