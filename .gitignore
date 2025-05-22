@@ -3,3 +3,7 @@
 /build
 /dist
 /fksbh.exe.spec
+build
+dist
+venv
+/FastSplitterBarHandler.spec

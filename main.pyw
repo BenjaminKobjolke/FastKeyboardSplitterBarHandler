@@ -14,7 +14,12 @@ from tkinter import Tk, Text, Scrollbar, END, simpledialog, Entry, Button, Label
 import os
 from elevate import elevate
 import queue
-from PyHotKey import Key, keyboard_manager as manager
+# Import winhotkeys library
+try:
+    from winhotkeys import HotkeyHandler
+except ImportError:
+    # If that fails, try a direct import from the local file
+    from hotkey import HotkeyHandler
 import win32con
 import win32event
 import win32api
@@ -24,12 +29,13 @@ import tkinter as tk
 import math
 
 # set to true when working on this project
-is_debug = False
+is_debug = True
 
 main_hotkey = "alt+shift+W"
 screenshot_hotkey = "ctrl+alt+F9"
 data_folder = "data"
 
+'''
 if not is_debug:
     elevate(show_console=False)
 
@@ -40,9 +46,10 @@ if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
     mutex = None
     print("Another instance of this application is already running.")
     sys.exit(1)
-
+'''
 
 class MyApp:
+    print("hi")
     last_active_window = None
     mouse_is_pressed = False  # Flag to keep track of mouse state
     splitterbar_coordinates = []
@@ -91,6 +98,13 @@ class MyApp:
         '''
 
     def on_close(self):
+        # Stop hotkey handlers before exiting
+        if hasattr(self, 'main_hotkey_handler'):
+            self.main_hotkey_handler.stop()
+        if hasattr(self, 'screenshot_hotkey_handler'):
+            self.screenshot_hotkey_handler.stop()
+        
+        self.debug_print('Stopping hotkey handlers...')
         self.root.destroy()
         exit(0)
 
@@ -198,6 +212,14 @@ class MyApp:
         self.mouse_is_pressed = False
         pyautogui.moveTo(self.initial_mouse_position[0], self.initial_mouse_position[1])
         keyboard.unhook_all()
+        
+        # Stop existing hotkey handlers if they exist
+        if hasattr(self, 'main_hotkey_handler'):
+            self.main_hotkey_handler.stop()
+        if hasattr(self, 'screenshot_hotkey_handler'):
+            self.screenshot_hotkey_handler.stop()
+            
+        # Set up hotkeys again
         self.setup_hotkeys()
         self.hooked_keys = []
 
@@ -236,24 +258,15 @@ class MyApp:
                 self.end_mouse_drag()                
 
     def setup_hotkeys(self):
-        manager.suppress = True
-        id1 = manager.register_hotkey([Key.shift_l, Key.alt_l, 'w'], None, self.main_hotkey_pressed)
-        if -1 == id1:
-            self.debug_print('Already registered!')
-        elif 0 == id1:
-            self.debug_print('Invalid parameters!')
-        else:
-            self.debug_print('Hotkey id: {}'.format(id1))
-
-        id2 = manager.register_hotkey([Key.shift_l, Key.alt_l, 'e'], None, self.take_screenshot)
-        if -1 == id2:
-            self.debug_print('Already registered!')
-        elif 0 == id2:
-            self.debug_print('Invalid parameters!')
-        else:
-            self.debug_print('Hotkey id: {}'.format(id2))
-        # keyboard.add_hotkey(main_hotkey, self.search_splitter_bars, suppress=True)
-        # keyboard.add_hotkey(screenshot_hotkey, self.take_screenshot, suppress=True)
+        # Create hotkey handlers using winhotkeys library
+        self.main_hotkey_handler = HotkeyHandler("alt+shift+w", self.main_hotkey_pressed, suppress=True)
+        self.screenshot_hotkey_handler = HotkeyHandler("alt+shift+e", self.take_screenshot, suppress=True)
+        
+        # Start listening for hotkeys
+        self.main_hotkey_handler.start()
+        self.screenshot_hotkey_handler.start()
+        
+        self.debug_print('Hotkeys registered and active')
 
     def main_hotkey_pressed(self):
         self.debug_print("main_hotkey_pressed")
@@ -332,6 +345,14 @@ class MyApp:
         self.debug_print("overlay_esc_pressed")
         keyboard.unhook_all()
         self.root.after(100, self.hide_overlay)
+        
+        # Stop existing hotkey handlers if they exist
+        if hasattr(self, 'main_hotkey_handler'):
+            self.main_hotkey_handler.stop()
+        if hasattr(self, 'screenshot_hotkey_handler'):
+            self.screenshot_hotkey_handler.stop()
+            
+        # Set up hotkeys again
         self.setup_hotkeys()
 
     def overlay_keyboard_pressed(self, e):
@@ -548,7 +569,6 @@ class MyApp:
                     filenames.append(os.path.join(folder_path, filename))
 
         return filenames
-
 
 root = Tk()
 app = MyApp(root)
