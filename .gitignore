@@ -7,3 +7,4 @@ build
 dist
 venv
 /FastSplitterBarHandler.spec
+/debug_*.png
