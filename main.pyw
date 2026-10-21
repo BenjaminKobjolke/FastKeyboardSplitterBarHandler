@@ -1,3 +1,21 @@
+"""
+FastKeyboardSplitterBarHandler - Keyboard-controlled splitter bar dragging
+
+This tool allows you to drag vertical splitter bars using keyboard shortcuts.
+
+Detection Modes:
+- 'template': Uses reference images from the data folder (traditional method)
+- 'auto': Uses computer vision to automatically detect vertical bars
+- 'both': Combines both methods for maximum coverage (default)
+
+The automatic detection uses:
+1. Canny edge detection + Hough line transform for detecting vertical lines
+2. Gradient analysis to find vertical edges (splitter bars)
+3. Morphological operations to enhance vertical structures
+
+Change DETECTION_MODE in MyApp class to switch modes.
+"""
+
 from typing import Optional
 import cv2
 import numpy as np
@@ -14,12 +32,7 @@ from tkinter import Tk, Text, Scrollbar, END, simpledialog, Entry, Button, Label
 import os
 from elevate import elevate
 import queue
-# Import winhotkeys library
-try:
-    from winhotkeys import HotkeyHandler
-except ImportError:
-    # If that fails, try a direct import from the local file
-    from hotkey import HotkeyHandler
+from PyHotKey import Key, keyboard_manager as manager
 import win32con
 import win32event
 import win32api
@@ -70,7 +83,10 @@ class MyApp:
     last_proccess_name = None
 
     MATCH_THRESHOLD = 0.8
-    BORDER_LIMIT = 50
+    BORDER_LIMIT = 30
+
+    # Automatic detection mode: 'template', 'auto', or 'both'
+    DETECTION_MODE = 'both'
 
     def __init__(self, root):
         self.last_active_window = win32gui.GetForegroundWindow()
@@ -98,13 +114,8 @@ class MyApp:
         '''
 
     def on_close(self):
-        # Stop hotkey handlers before exiting
-        if hasattr(self, 'main_hotkey_handler'):
-            self.main_hotkey_handler.stop()
-        if hasattr(self, 'screenshot_hotkey_handler'):
-            self.screenshot_hotkey_handler.stop()
-        
         self.debug_print('Stopping hotkey handlers...')
+        manager.unregister_all_hotkeys()
         self.root.destroy()
         exit(0)
 
@@ -212,15 +223,6 @@ class MyApp:
         self.mouse_is_pressed = False
         pyautogui.moveTo(self.initial_mouse_position[0], self.initial_mouse_position[1])
         keyboard.unhook_all()
-        
-        # Stop existing hotkey handlers if they exist
-        if hasattr(self, 'main_hotkey_handler'):
-            self.main_hotkey_handler.stop()
-        if hasattr(self, 'screenshot_hotkey_handler'):
-            self.screenshot_hotkey_handler.stop()
-            
-        # Set up hotkeys again
-        self.setup_hotkeys()
         self.hooked_keys = []
 
     def mouse_move(self, e):
@@ -258,15 +260,22 @@ class MyApp:
                 self.end_mouse_drag()                
 
     def setup_hotkeys(self):
-        # Create hotkey handlers using winhotkeys library
-        self.main_hotkey_handler = HotkeyHandler("alt+shift+w", self.main_hotkey_pressed, suppress=True)
-        self.screenshot_hotkey_handler = HotkeyHandler("alt+shift+e", self.take_screenshot, suppress=True)
-        
-        # Start listening for hotkeys
-        self.main_hotkey_handler.start()
-        self.screenshot_hotkey_handler.start()
-        
-        self.debug_print('Hotkeys registered and active')
+        manager.suppress = True
+        id1 = manager.register_hotkey([Key.shift_l, Key.alt_l, 'w'], None, self.main_hotkey_pressed)
+        if -1 == id1:
+            self.debug_print('Already registered!')
+        elif 0 == id1:
+            self.debug_print('Invalid parameters!')
+        else:
+            self.debug_print('Hotkey id: {}'.format(id1))
+
+        id2 = manager.register_hotkey([Key.shift_l, Key.alt_l, 'e'], None, self.take_screenshot)
+        if -1 == id2:
+            self.debug_print('Already registered!')
+        elif 0 == id2:
+            self.debug_print('Invalid parameters!')
+        else:
+            self.debug_print('Hotkey id: {}'.format(id2))
 
     def main_hotkey_pressed(self):
         self.debug_print("main_hotkey_pressed")
@@ -323,7 +332,16 @@ class MyApp:
             for i, coordinate in enumerate(self.splitterbar_coordinates, start=1):
                 circle_x, circle_y = coordinate[2], coordinate[3]
 
-                self.debug_print(f"Drawing circle {i} at {circle_x}, {circle_y}")
+                # Get detection method and choose color
+                detection_method = coordinate[4] if len(coordinate) > 4 else 'unknown'
+                if detection_method == 'template':
+                    fill_color = 'blue'
+                elif detection_method == 'auto' or detection_method == 'gradient':
+                    fill_color = 'red'
+                else:
+                    fill_color = 'yellow'  # unknown
+
+                self.debug_print(f"Drawing circle {i} at {circle_x}, {circle_y} ({detection_method})")
                 print(f"Drawing circle {i} at {circle_x}, {circle_y}")
                 if i < 10:
                     counter_text = str(i)
@@ -333,7 +351,7 @@ class MyApp:
                     hook_key = counter_text
 
                 self.canvas.create_oval(circle_x - radius, circle_y - radius, circle_x + radius, circle_y + radius,
-                                        fill='red')
+                                        fill=fill_color)
                 self.canvas.create_text(circle_x, circle_y, text=counter_text, font=("Arial", int(radius), "bold"),
                                         fill="white")
                 self.hooked_keys.append(keyboard.hook_key(hook_key, self.overlay_keyboard_pressed, suppress=True))
@@ -345,15 +363,6 @@ class MyApp:
         self.debug_print("overlay_esc_pressed")
         keyboard.unhook_all()
         self.root.after(100, self.hide_overlay)
-        
-        # Stop existing hotkey handlers if they exist
-        if hasattr(self, 'main_hotkey_handler'):
-            self.main_hotkey_handler.stop()
-        if hasattr(self, 'screenshot_hotkey_handler'):
-            self.screenshot_hotkey_handler.stop()
-            
-        # Set up hotkeys again
-        self.setup_hotkeys()
 
     def overlay_keyboard_pressed(self, e):
         #self.debug_print("overlay_digit_pressed")
@@ -442,22 +451,46 @@ class MyApp:
         active_window = gw.getActiveWindow()
         gray_screenshot = self.get_screenshot(active_window)
 
-        matching_subfolders = self.get_matching_subfolders(active_window)
-
-        if matching_subfolders is None:
-            self.debug_print(f"No matching subfolders found for '{active_window.title}'.")
-            return True
         # Remember the initial mouse position
         self.initial_mouse_position = pyautogui.position()
-        self.debug_print("search_splitter_bars")
-        self.splitterbar_coordinates = self.find_splitter_bars(active_window, gray_screenshot, matching_subfolders)
 
-        if self.splitterbar_coordinates not in (None, []):
-            self.debug_print(f"Found {len(self.splitterbar_coordinates)} splitter bars.")
+        all_coordinates = []
+
+        # Template matching mode
+        if self.DETECTION_MODE in ('template', 'both'):
+            matching_subfolders = self.get_matching_subfolders(active_window)
+
+            if matching_subfolders is not None:
+                self.debug_print("Running template matching detection")
+                template_matches = self.find_splitter_bars(active_window, gray_screenshot, matching_subfolders)
+                if template_matches:
+                    all_coordinates.extend(template_matches)
+            else:
+                self.debug_print(f"No matching subfolders found for '{active_window.title}'.")
+
+        # Automatic detection mode
+        if self.DETECTION_MODE in ('auto', 'both'):
+            self.debug_print("Running automatic detection")
+
+            # Try edge/line detection method
+            auto_matches = self.detect_vertical_bars_automatically(active_window, gray_screenshot)
+            if auto_matches:
+                all_coordinates.extend(auto_matches)
+
+            # Try gradient-based detection method
+            gradient_matches = self.detect_vertical_bars_by_gradient(active_window, gray_screenshot)
+            if gradient_matches:
+                all_coordinates.extend(gradient_matches)
+
+        # Remove duplicates from combined results
+        if all_coordinates:
+            all_coordinates = self.filter_by_proximity(all_coordinates, proximity=20)
+            self.splitterbar_coordinates = all_coordinates
+            self.debug_print(f"Total found: {len(self.splitterbar_coordinates)} splitter bars.")
             self.show_overlay()
             return True
 
-        self.debug_print("No match found" + "\n")
+        self.debug_print("No vertical bars found" + "\n")
         return False
 
     def get_screenshot(self, active_window):
@@ -490,7 +523,7 @@ class MyApp:
                     target_x, target_y, target_relative_x, target_relative_y = self.calculate_coordinates(pt,
                                                                                                           active_window,
                                                                                                           template.shape)
-                    file_matches.append((target_x, target_y, target_relative_x, target_relative_y))
+                    file_matches.append((target_x, target_y, target_relative_x, target_relative_y, 'template'))
 
                 iterations += 1
                 if iterations >= max_iterations:
@@ -501,7 +534,7 @@ class MyApp:
                 continue
 
             # Apply proximity check to matches from this file
-            filtered_matches = self.filter_by_proximity(file_matches, proximity=100)
+            filtered_matches = self.filter_by_proximity(file_matches, proximity=20)
             all_matches.extend(filtered_matches)
 
         self.debug_print(f"Total matches found: {len(all_matches)}")
@@ -569,6 +602,173 @@ class MyApp:
                     filenames.append(os.path.join(folder_path, filename))
 
         return filenames
+
+    def detect_vertical_bars_automatically(self, active_window, gray_screenshot):
+        """
+        Automatically detect vertical bars (splitter bars) using computer vision techniques.
+        Returns a list of coordinates in the same format as find_splitter_bars.
+        """
+        self.debug_print("Running automatic vertical bar detection")
+
+        # Get screenshot dimensions
+        height, width = gray_screenshot.shape
+        cv2.imwrite('debug_screenshot.png', gray_screenshot)
+
+        # Apply Gaussian blur to reduce noise
+        blurred = cv2.GaussianBlur(gray_screenshot, (5, 5), 0)
+
+        # Use Canny edge detection
+        edges = cv2.Canny(blurred, 20, 100)
+        cv2.imwrite('debug_edges.png', edges)
+
+        # Create a kernel that emphasizes vertical structures
+        vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 60))
+
+        # Apply morphological operations to enhance vertical lines
+        vertical_lines = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, vertical_kernel)
+
+        # Dilate to make lines thicker and easier to detect
+        vertical_lines = cv2.dilate(vertical_lines, vertical_kernel, iterations=2)
+        cv2.imwrite('debug_vertical_lines.png', vertical_lines)
+
+        # Use HoughLinesP to detect line segments
+        lines = cv2.HoughLinesP(vertical_lines, 1, np.pi/180, threshold=15,
+                                minLineLength=height*0.05, maxLineGap=200)
+
+        detected_bars = []
+
+        if lines is not None:
+            self.debug_print(f"Found {len(lines)} potential vertical lines")
+
+            # Debug counters
+            angle_rejected = 0
+            border_rejected = 0
+            passed_angle = 0
+
+            # Process detected lines
+            for line in lines:
+                x1, y1, x2, y2 = line[0]
+
+                # Ensure y1 < y2 for valid array slicing
+                if y1 > y2:
+                    y1, y2 = y2, y1
+                    x1, x2 = x2, x1
+
+                # Check if line is mostly vertical (angle close to 90 degrees)
+                angle = abs(np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi)
+
+                if 75 <= angle <= 105:  # Nearly vertical
+                    passed_angle += 1
+                    # Calculate center point of the line
+                    center_x = (x1 + x2) // 2
+                    center_y = (y1 + y2) // 2
+                    self.debug_print(f"Vertical line found: x1={x1}, x2={x2}, y1={y1}, y2={y2}, center_x={center_x}, angle={angle:.1f}°")
+
+                    # Skip if too close to borders
+                    if (center_x < self.BORDER_LIMIT or
+                        center_x > width - self.BORDER_LIMIT or
+                        center_y < self.BORDER_LIMIT or
+                        center_y > height - self.BORDER_LIMIT):
+                        border_rejected += 1
+                        continue
+
+                    # Check if this line looks like a splitter bar (darker vertical strip)
+                    # Sample a small region around the line
+                    sample_width = 10
+                    x_start = max(0, center_x - sample_width)
+                    x_end = min(width, center_x + sample_width)
+
+                    region = gray_screenshot[max(0, y1):min(height, y2), x_start:x_end]
+
+                    if region.size > 0:
+                        # Calculate statistics
+                        mean_brightness = np.mean(region)
+                        std_brightness = np.std(region)
+
+                        # Debug: show values for each detected line
+                        self.debug_print(f"Testing line at x={center_x}: brightness={mean_brightness:.1f}, std={std_brightness:.1f}")
+
+                        # Splitter bars are often darker and have low variance
+                        # Adjust these thresholds based on testing
+                        if mean_brightness < 180 and std_brightness < 100:
+                            # Convert to absolute screen coordinates
+                            screen_x = center_x + active_window.left
+                            screen_y = center_y + active_window.top
+
+                            detected_bars.append((screen_x, screen_y, center_x, center_y, 'auto'))
+                    else:
+                        self.debug_print(f"Empty region for line at x={center_x}, y1={y1}, y2={y2}")
+                else:
+                    angle_rejected += 1
+
+            # Debug output
+            self.debug_print(f"Angle filter: {passed_angle} passed, {angle_rejected} rejected (not 75-105°)")
+            self.debug_print(f"Border filter: {border_rejected} rejected (within {self.BORDER_LIMIT}px of edge)")
+            self.debug_print(f"Before brightness filter: {len(detected_bars)} bars")
+
+            # Filter by proximity to avoid duplicates
+            filtered_bars = self.filter_by_proximity(detected_bars, proximity=20)
+            self.debug_print(f"After filtering: {len(filtered_bars)} vertical bars detected")
+
+            return filtered_bars
+        else:
+            self.debug_print("No vertical lines detected")
+            return []
+
+    def detect_vertical_bars_by_gradient(self, active_window, gray_screenshot):
+        """
+        Alternative method using gradient analysis to find vertical splitter bars.
+        Splitter bars typically have strong horizontal gradients (dark-light-dark pattern).
+        """
+        self.debug_print("Running gradient-based vertical bar detection")
+
+        height, width = gray_screenshot.shape
+
+        # Calculate horizontal gradient (Sobel)
+        gradient_x = cv2.Sobel(gray_screenshot, cv2.CV_64F, 1, 0, ksize=3)
+        gradient_x = np.abs(gradient_x)
+
+        # Normalize to 0-255
+        gradient_x = np.uint8(255 * gradient_x / np.max(gradient_x))
+
+        # Threshold to find strong vertical edges
+        _, thresh = cv2.threshold(gradient_x, 100, 255, cv2.THRESH_BINARY)
+
+        # Find contours
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        detected_bars = []
+
+        for contour in contours:
+            # Get bounding rectangle
+            x, y, w, h = cv2.boundingRect(contour)
+
+            # Check if contour is tall and thin (like a vertical bar)
+            aspect_ratio = h / (w + 1)
+
+            if aspect_ratio > 3 and h > height * 0.2 and w < 30:
+                # Calculate center
+                center_x = x + w // 2
+                center_y = y + h // 2
+
+                # Skip if too close to borders
+                if (center_x < self.BORDER_LIMIT or
+                    center_x > width - self.BORDER_LIMIT or
+                    center_y < self.BORDER_LIMIT or
+                    center_y > height - self.BORDER_LIMIT):
+                    continue
+
+                # Convert to absolute screen coordinates
+                screen_x = center_x + active_window.left
+                screen_y = center_y + active_window.top
+
+                detected_bars.append((screen_x, screen_y, center_x, center_y, 'gradient'))
+
+        # Filter by proximity
+        filtered_bars = self.filter_by_proximity(detected_bars, proximity=20)
+        self.debug_print(f"Gradient detection found {len(filtered_bars)} vertical bars")
+
+        return filtered_bars
 
 root = Tk()
 app = MyApp(root)
